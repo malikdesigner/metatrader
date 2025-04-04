@@ -1,0 +1,17 @@
+[
+  {
+    "name": "wt_dtoken",
+    "value": "agvwSbbZAQj+ba71/N368whjie72yLT4cIQRmsRvwh+Emm57WUBKeblmzuIcvm32GNQYuA==",
+    "domain": "mt5web.j2t.com",
+    "path": "/",
+    "expires": 1778161177.872053,
+    "size": 81,
+    "httpOnly": true,
+    "secure": true,
+    "session": false,
+    "sameSite": "None",
+    "priority": "Medium",
+    "sameParty": false,
+    "sourceScheme": "Secure"
+  }
+]
