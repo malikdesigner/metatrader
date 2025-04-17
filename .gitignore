@@ -2,3 +2,4 @@ node_modules/
 metatrader.zip
 mydata.txt
 screenshots/
+package-lock.json
