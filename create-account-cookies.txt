@@ -1,0 +1,17 @@
+[
+  {
+    "name": "wt_dtoken",
+    "value": "JECartOSTHGUQnDlINZFaz3z2pDrNQZKIFhfeQTEW3wu2IHKX8gWiTDEBWvjQ8C6bv/XpA==",
+    "domain": "web.metatrader.app",
+    "path": "/",
+    "expires": 1795458737.671015,
+    "size": 81,
+    "httpOnly": true,
+    "secure": true,
+    "session": false,
+    "sameSite": "None",
+    "priority": "Medium",
+    "sameParty": false,
+    "sourceScheme": "Secure"
+  }
+]

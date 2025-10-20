@@ -1,0 +1,47 @@
+[
+  {
+    "id": "20280980",
+    "Symbol": "BTCUSDs",
+    "Ticket": "20280980",
+    "Time": "10.19 11:38:17",
+    "Type": "buy",
+    "Volume": "1.00",
+    "Open Price": "106 659.37",
+    "Stop Loss": "",
+    "Take Profit": "",
+    "Close Price": "107 665.68",
+    "Swap": "",
+    "Profit": "1 006.31",
+    "Comment": ""
+  },
+  {
+    "id": "20281129",
+    "Symbol": "BTCUSDs",
+    "Ticket": "20281129",
+    "Time": "10.19 12:19:03",
+    "Type": "buy",
+    "Volume": "0.01",
+    "Open Price": "106 438.70",
+    "Stop Loss": "",
+    "Take Profit": "",
+    "Close Price": "108 459.42",
+    "Swap": "",
+    "Profit": "20.21",
+    "Comment": ""
+  },
+  {
+    "id": "20281130",
+    "Symbol": "BTCUSDs",
+    "Ticket": "20281130",
+    "Time": "10.19 12:19:26",
+    "Type": "buy",
+    "Volume": "1.00",
+    "Open Price": "106 450.69",
+    "Stop Loss": "",
+    "Take Profit": "",
+    "Close Price": "108 459.42",
+    "Swap": "",
+    "Profit": "2 008.73",
+    "Comment": ""
+  }
+]

@@ -1,0 +1,22 @@
+[
+  {
+    "name": "wt_dtoken",
+    "value": "r/+jpNfn2kBwxiGKRLBP8MI/HLMb+hHzHxXHotp5HzvoIXNwKrsGN+sKDgIPsZ9AUWQcAg==",
+    "domain": "webtrader.switchmarkets.com",
+    "path": "/",
+    "expires": 1795508243.146167,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "wt_dtoken",
+    "value": "+23seJ1CaAeVIHLGy1p5Sm3H1wJXfVjH2bLLhNrEDJnbZbVCQe0x5wO0Mo9RaL8DwSYhkA==",
+    "domain": "web.metatrader.app",
+    "path": "/",
+    "expires": 1795456552.293628,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  }
+]
