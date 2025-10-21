@@ -163,7 +163,7 @@ function getLatestTradeData($data) {
 /**
  * Transform data to the required format
  */
-function transformToRequiredFormat($data) {
+function transformToRequiredFormat($data, $accountNumber) {
     $accountInfo = $data['account_info'] ?? [];
     $metrics = calculateAccountMetrics($data);
     $latestTrade = getLatestTradeData($data);
@@ -220,27 +220,72 @@ function transformToRequiredFormat($data) {
     if ($ruleBrokenCount > 0) {
         $accountStatus = "Violated";
     }
-    $peakEquity = isset($data['peak_equity']) ? floatval($data['peak_equity']) : 0;
+    $peakEquity = isset($data['peak_equity']) ? floatval($data['peak_equity']) : $equity;
+    $lowestEquity = $equity; // Initialize lowest equity with current equity
+
+    // Fetch previous lowest equity and opening balance from singleTrade.json
+    $previousHighRewardMark = 0.00;
+    $previousOpeningBalance = $balance;
+    $singleTradeFile = BASE_DATA_DIR . '/' . sanitizeAccountNumber($accountNumber) . '/singleTrade.json';
+    if (file_exists($singleTradeFile)) {
+        $previousData = file_get_contents($singleTradeFile);
+        $previousJson = json_decode($previousData, true);
+        if (isset($previousJson['Lowest Equity'])) {
+            $lowestEquity = min(floatval($previousJson['Lowest Equity']), $equity);
+        }
+        if (isset($previousJson['High Reward Mark (Max DD % Locked)'])) {
+            $previousHighRewardMark = floatval($previousJson['High Reward Mark (Max DD % Locked)']);
+        }
+        if (isset($previousJson['Account Opening Balance'])) {
+            $previousOpeningBalance = floatval($previousJson['Account Opening Balance']);
+        }
+    }
 
     // Calculate peak equity percentage change
     $peakEquityPercentChange = 0;
-    if ($balance > 0) {
-        $peakEquityPercentChange = (($peakEquity - $balance) / $balance) * 100;
+    if ($previousOpeningBalance > 0) {
+        $peakEquityPercentChange = (($peakEquity - $previousOpeningBalance) / $previousOpeningBalance) * 100;
     }
 
-    // Calculate High Reward Mark (Max DD % Locked) based on maxDrawdownPercent
-    // Use 50% of max drawdown, capped at 0.5% with a minimum of 0.1%
-    $highRewardMark = min($maxDrawdownPercent * 0.5, 0.5);
-    $highRewardMark = number_format(max($highRewardMark, 0.1), 2, '.', '');
+    // Calculate max drawdown percentage based on peak equity
+    $max_dd_pct = 0.00;
+    if ($peakEquity > 0) {
+        $max_dd_pct = (($peakEquity - $lowestEquity) / $peakEquity) * 100;
+    }
+
+    // Calculate peak gain percentage
+    $peak_gain_pct = 0.00;
+    if ($previousOpeningBalance > 0) {
+        $peak_gain_pct = (($peakEquity - $previousOpeningBalance) / $previousOpeningBalance) * 100;
+    }
+
+    // Calculate High Reward Mark
+    $high_reward_mark = 0.00;
+    if ($max_dd_pct > 0) {
+        $high_reward_mark = ($peak_gain_pct / $max_dd_pct) * 100;
+        $high_reward_mark = min($high_reward_mark, 0.5); // Cap at 0.5 as per previous logic
+    } elseif ($peak_gain_pct > 0) {
+        // If no drawdown, base high reward mark on a minimal drawdown assumption
+        $high_reward_mark = min($peak_gain_pct * 0.5, 0.5);
+    }
+    $high_reward_mark = number_format(max($high_reward_mark, 0.1), 2, '.', '');
+
+    // Calculate current High Reward Mark based on maxDrawdownPercent
+    $currentHighRewardMark = min($maxDrawdownPercent * 0.5, 0.5);
+    $currentHighRewardMark = number_format(max($currentHighRewardMark, 0.1), 2, '.', '');
+
+    // Accumulate High Reward Mark
+    $totalHighRewardMark = number_format($previousHighRewardMark + floatval($currentHighRewardMark), 2, '.', '');
 
     // Build the final formatted data
     $formattedData = [
         "Account Number" => intval($accountInfo['account_number'] ?? 0),
-        "Account Opening Balance" => number_format($balance, 2, '.', ''),
+        "Account Opening Balance" => number_format($previousOpeningBalance, 2, '.', ''),
         "Account Equity" => number_format($equity, 2, '.', ''),
         "Free Margin" => number_format($freeMargin, 2, '.', ''),
         "Target Profit" => "0.00",
         "Peak Equity" => number_format($peakEquity, 2, '.', ''),
+        "Lowest Equity" => number_format($lowestEquity, 2, '.', ''),
         "Peak Equity % Change" => number_format($peakEquityPercentChange, 2, '.', ''),
         "Current Profit" => number_format($currentProfit, 2, '.', ''),
         "Breach Trade Profits" => number_format($metrics['breach_trade_profits'], 2, '.', ''),
@@ -249,14 +294,10 @@ function transformToRequiredFormat($data) {
         "Active Account Days" => $activeDays,
         "Max Drawdown" => number_format($maxDrawdownPercent, 2, '.', ''),
         "Leverage" => $leverage,
-        "EA Logic: 'Rule Broken (0.25% Opening Balance DD)' Based On Adjusted Profit" => $openingBalanceRuleBroken,
-        "Rule Broken (0.25% Peak Equity DD)" => $peakEquityRuleBroken,
-        "Rule Broken Count" => $ruleBrokenCount,
-        "Violated Trades" => $violatedTradesStr,
         "Total Commissions" => number_format($metrics['total_commissions'], 2, '.', ''),
         "Total Swaps" => number_format($metrics['total_swaps'], 2, '.', ''),
         "Account Status" => $accountStatus,
-        "High Reward Mark (Max DD % Locked)" => $highRewardMark,
+        "High Reward Mark (Max DD % Locked)" => $totalHighRewardMark,
         "Adjusted Drawdown %" => $adjustedDrawdownPercent,
         "Adjusted Profit DD Triggered" => $openingBalanceRuleBroken,
         "Timestamp" => date('Y-m-d H:i:s')
@@ -264,11 +305,6 @@ function transformToRequiredFormat($data) {
 
     $formattedData["MaxTrade"] = isset($data['maxTrade']) ? $data['maxTrade'] : 0;
     $formattedData["maxOpenTrades"] = isset($data['maxOpenTrades']) ? $data['maxOpenTrades'] : 0;
-
-    // Add latest trade data if available
-    if ($latestTrade) {
-        $formattedData["Latest Trade"] = $latestTrade;
-    }
 
     return $formattedData;
 }
@@ -327,9 +363,9 @@ function saveTradingData($accountNumber, $data) {
         ensureDirectoryExists($accountDir);
 
         // Transform data to required format
-        $formattedData = transformToRequiredFormat($data);
+        $formattedData = transformToRequiredFormat($data, $accountNumber);
 
-        // 1. Save to singleTrade.json (overwrite - latest only)
+        // Save to singleTrade.json (overwrite - latest only)
         $singleTradeFile = $accountDir . '/singleTrade.json';
         $jsonData = json_encode($formattedData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
         if ($jsonData === false) {
@@ -340,7 +376,7 @@ function saveTradingData($accountNumber, $data) {
             throw new Exception("Failed to write to singleTrade.json");
         }
 
-        // 2. Append to allTrade.json (historical log)
+        // Append to allTrade.json (historical log)
         $totalRecords = appendToAllTrades($accountDir, $formattedData);
 
         return [
@@ -354,6 +390,7 @@ function saveTradingData($accountNumber, $data) {
             'current_profit' => $formattedData['Current Profit'],
             'account_status' => $formattedData['Account Status'],
             'latest_trade_ticket' => isset($formattedData['Latest Trade']) ? $formattedData['Latest Trade']['Ticket'] : 'N/A',
+            'high_reward_mark' => $formattedData['High Reward Mark (Max DD % Locked)'],
             'saved_at' => date('Y-m-d H:i:s'),
             'singleTrade_size' => filesize($singleTradeFile) . ' bytes',
             'allTrade_size' => filesize($accountDir . '/allTrade.json') . ' bytes'
