@@ -6,25 +6,25 @@
  * - allTrade.json: Historical log of all trades (appended)
  * Upload to: /public_html/updateJson.php
  */
-
+ 
 // Disable error display, enable error logging
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 ini_set('error_log', __DIR__ . '/api_errors.log');
-
+ 
 // Set headers
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, X-API-Key');
-
+ 
 // Handle preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit();
 }
-
+ 
 // Only allow POST requests
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -34,10 +34,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     ]);
     exit();
 }
-
+ 
 // Configuration
 define('BASE_DATA_DIR', __DIR__ . '/mt5Data_test');
-
+ 
 /**
  * Create directory if it doesn't exist
  */
@@ -52,14 +52,14 @@ function ensureDirectoryExists($dir) {
     }
     return true;
 }
-
+ 
 /**
  * Sanitize account number
  */
 function sanitizeAccountNumber($accountNumber) {
     return preg_replace('/[^a-zA-Z0-9_-]/', '', $accountNumber);
 }
-
+ 
 /**
  * Calculate values from positions data
  */
@@ -72,7 +72,7 @@ function calculateAccountMetrics($data) {
         'breach_trade_profits' => 0.00,
         'violated_trades' => []
     ];
-
+ 
     // Calculate from positions if available
     if (isset($data['positions']) && is_array($data['positions'])) {
         foreach ($data['positions'] as $position) {
@@ -82,14 +82,14 @@ function calculateAccountMetrics($data) {
                 $profitStr = str_replace(['+', ' ', '$', ','], '', $position['Profit']);
                 $profit = floatval($profitStr);
             }
-
+ 
             // Count profits and losses
             if ($profit > 0) {
                 $metrics['total_closed_profits'] += $profit;
             } elseif ($profit < 0) {
                 $metrics['total_closed_losses'] += abs($profit);
             }
-
+ 
             // Track violated trades
             $violatedStatus = isset($position['Violated']) ? $position['Violated'] : 'No';
             $metrics['violated_trades'][] = [
@@ -97,7 +97,7 @@ function calculateAccountMetrics($data) {
                 'Symbol' => $position['Symbol'] ?? 'N/A',
                 'Violated' => $violatedStatus
             ];
-
+ 
             // Sum commissions and swaps if available
             if (isset($position['Commission'])) {
                 $commissionStr = str_replace(['+', ' ', '$', ','], '', $position['Commission']);
@@ -109,20 +109,20 @@ function calculateAccountMetrics($data) {
             }
         }
     }
-
+ 
     return $metrics;
 }
-
+ 
 /**
  * Get latest trade from positions or latestTrade data
  */
 function getLatestTradeData($data) {
     $latestTrade = null;
-
+ 
     // First, try to get from latestTrade field
     if (isset($data['latestTrade']) && !empty($data['latestTrade'])) {
         $lt = $data['latestTrade'];
-        
+       
         // Find the full trade data from positions array
         if (isset($data['positions']) && is_array($data['positions'])) {
             foreach ($data['positions'] as $position) {
@@ -133,12 +133,12 @@ function getLatestTradeData($data) {
             }
         }
     }
-
+ 
     // If not found, get the last position from positions array
     if (!$latestTrade && isset($data['positions']) && is_array($data['positions']) && count($data['positions']) > 0) {
         $latestTrade = end($data['positions']);
     }
-
+ 
     // Format latest trade data
     if ($latestTrade) {
         return [
@@ -156,10 +156,10 @@ function getLatestTradeData($data) {
             'Comment' => $latestTrade['Comment'] ?? ''
         ];
     }
-
+ 
     return null;
 }
-
+ 
 /**
  * Transform data to the required format
  */
@@ -167,42 +167,42 @@ function transformToRequiredFormat($data, $accountNumber) {
     $accountInfo = $data['account_info'] ?? [];
     $metrics = calculateAccountMetrics($data);
     $latestTrade = getLatestTradeData($data);
-
+ 
     // Extract balance values
     $balance = floatval($accountInfo['balance'] ?? 0);
     $equity = floatval($accountInfo['equity'] ?? 0);
     $freeMargin = floatval($accountInfo['free_margin'] ?? 0);
-    
+   
     // Calculate current profit (equity - balance)
     $currentProfit = $equity - $balance;
-    
+   
     // Calculate max drawdown percentage
     $maxDrawdownPercent = 0.00;
     if ($balance > 0) {
         $maxDrawdownPercent = (($balance - $equity) / $balance) * 100;
         $maxDrawdownPercent = max(0, $maxDrawdownPercent); // Don't allow negative
     }
-
+ 
     // Calculate adjusted drawdown
     $adjustedDrawdownPercent = -round($maxDrawdownPercent / 100, 4);
-
+ 
     // Check if DD rules are broken (0.25% threshold)
     $openingBalanceRuleBroken = ($maxDrawdownPercent >= 0.25) ? "Yes" : "No";
     $peakEquityRuleBroken = ($maxDrawdownPercent >= 0.25) ? "Yes" : "No";
     $ruleBrokenCount = 0;
     if ($openingBalanceRuleBroken === "Yes") $ruleBrokenCount++;
     if ($peakEquityRuleBroken === "Yes") $ruleBrokenCount++;
-
+ 
     // Format violated trades string
     $violatedTradesStr = "";
     foreach ($metrics['violated_trades'] as $trade) {
         $violatedTradesStr .= "[Ticket: {$trade['Ticket']}, Symbol: {$trade['Symbol']}, Violated: {$trade['Violated']}] ";
     }
     $violatedTradesStr = trim($violatedTradesStr) ?: "No violations";
-
+ 
     // Get leverage (default to 1000 if not provided)
     $leverage = isset($accountInfo['leverage']) ? intval($accountInfo['leverage']) : 1000;
-
+ 
     // Calculate active days (from account opening date)
     $activeDays = 0;
     if (isset($accountInfo['accountOpeningDate']) && !empty($accountInfo['accountOpeningDate'])) {
@@ -214,7 +214,7 @@ function transformToRequiredFormat($data, $accountNumber) {
             $activeDays = floor(($currentDate - $openingDate) / (60 * 60 * 24));
         }
     }
-
+ 
     // Determine account status
     $accountStatus = "Normal";
     if ($ruleBrokenCount > 0) {
@@ -222,7 +222,7 @@ function transformToRequiredFormat($data, $accountNumber) {
     }
     $peakEquity = isset($data['peak_equity']) ? floatval($data['peak_equity']) : $equity;
     $lowestEquity = $equity; // Initialize lowest equity with current equity
-
+ 
     // Fetch previous lowest equity and opening balance from singleTrade.json
     $previousHighRewardMark = 0.00;
     $previousOpeningBalance = $balance;
@@ -240,43 +240,37 @@ function transformToRequiredFormat($data, $accountNumber) {
             $previousOpeningBalance = floatval($previousJson['Account Opening Balance']);
         }
     }
-
+ 
     // Calculate peak equity percentage change
     $peakEquityPercentChange = 0;
     if ($previousOpeningBalance > 0) {
         $peakEquityPercentChange = (($peakEquity - $previousOpeningBalance) / $previousOpeningBalance) * 100;
     }
+ 
+    // Determine if there are open trades
+    $openTradesCount = isset($data['positions']) ? count($data['positions']) : 0;
 
-    // Calculate max drawdown percentage based on peak equity
-    $max_dd_pct = 0.00;
-    if ($peakEquity > 0) {
-        $max_dd_pct = (($peakEquity - $lowestEquity) / $peakEquity) * 100;
+    // Calculate drawdown absolute
+    $drawdown_absolute = max($peakEquity - $lowestEquity, 0);
+
+    // Relative drawdown percentage
+    $drawdown_percent_relative = ($peakEquity > 0) ? ($drawdown_absolute / $peakEquity) * 100 : 0;
+
+    // Closed loss drawdown percentage
+    $closed_loss_drawdown_percent = ($peakEquity > 0) ? ($metrics['total_closed_losses'] / $peakEquity) * 100 : 0;
+
+    // Max DD %
+    $max_dd_pct = max($drawdown_percent_relative, $closed_loss_drawdown_percent);
+
+    // High Reward Mark (Max DD % Locked)
+    // Only update if there are open trades; otherwise keep previous value
+    if ($openTradesCount > 0) {
+        $totalHighRewardMark = number_format(max($previousHighRewardMark, $max_dd_pct), 2, '.', '');
+    } else {
+        // No open trades, freeze the previous High Reward Mark
+        $totalHighRewardMark = number_format($previousHighRewardMark, 2, '.', '');
     }
-
-    // Calculate peak gain percentage
-    $peak_gain_pct = 0.00;
-    if ($previousOpeningBalance > 0) {
-        $peak_gain_pct = (($peakEquity - $previousOpeningBalance) / $previousOpeningBalance) * 100;
-    }
-
-    // Calculate High Reward Mark
-    $high_reward_mark = 0.00;
-    if ($max_dd_pct > 0) {
-        $high_reward_mark = ($peak_gain_pct / $max_dd_pct) * 100;
-        $high_reward_mark = min($high_reward_mark, 0.5); // Cap at 0.5 as per previous logic
-    } elseif ($peak_gain_pct > 0) {
-        // If no drawdown, base high reward mark on a minimal drawdown assumption
-        $high_reward_mark = min($peak_gain_pct * 0.5, 0.5);
-    }
-    $high_reward_mark = number_format(max($high_reward_mark, 0.1), 2, '.', '');
-
-    // Calculate current High Reward Mark based on maxDrawdownPercent
-    $currentHighRewardMark = min($maxDrawdownPercent * 0.5, 0.5);
-    $currentHighRewardMark = number_format(max($currentHighRewardMark, 0.1), 2, '.', '');
-
-    // Accumulate High Reward Mark
-    $totalHighRewardMark = number_format($previousHighRewardMark + floatval($currentHighRewardMark), 2, '.', '');
-
+ 
     // Build the final formatted data
     $formattedData = [
         "Account Number" => intval($accountInfo['account_number'] ?? 0),
@@ -302,47 +296,47 @@ function transformToRequiredFormat($data, $accountNumber) {
         "Adjusted Profit DD Triggered" => $openingBalanceRuleBroken,
         "Timestamp" => date('Y-m-d H:i:s')
     ];
-
+ 
     $formattedData["MaxTrade"] = isset($data['maxTrade']) ? $data['maxTrade'] : 0;
     $formattedData["maxOpenTrades"] = isset($data['maxOpenTrades']) ? $data['maxOpenTrades'] : 0;
-
+ 
     return $formattedData;
 }
-
+ 
 /**
  * Append data to allTrade.json
  */
 function appendToAllTrades($accountDir, $formattedData) {
     $allTradeFile = $accountDir . '/allTrade.json';
-    
+   
     // Read existing data
     $allTrades = [];
     if (file_exists($allTradeFile)) {
         $existingData = file_get_contents($allTradeFile);
         $allTrades = json_decode($existingData, true);
-        
+       
         // If file is corrupted or not an array, start fresh
         if (!is_array($allTrades)) {
             $allTrades = [];
         }
     }
-    
+   
     // Append new data
     $allTrades[] = $formattedData;
-    
+   
     // Save back to file
     $jsonData = json_encode($allTrades, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     if ($jsonData === false) {
         throw new Exception("Failed to encode allTrade.json data: " . json_last_error_msg());
     }
-    
+   
     if (file_put_contents($allTradeFile, $jsonData, LOCK_EX) === false) {
         throw new Exception("Failed to write to allTrade.json");
     }
-    
+   
     return count($allTrades);
 }
-
+ 
 /**
  * Save trading data to JSON files
  */
@@ -350,35 +344,35 @@ function saveTradingData($accountNumber, $data) {
     try {
         // Sanitize account number
         $accountNumber = sanitizeAccountNumber($accountNumber);
-        
+       
         if (empty($accountNumber)) {
             throw new Exception("Invalid account number");
         }
-
+ 
         // Create account directory path
         $accountDir = BASE_DATA_DIR . '/' . $accountNumber;
-        
+       
         // Ensure directories exist
         ensureDirectoryExists(BASE_DATA_DIR);
         ensureDirectoryExists($accountDir);
-
+ 
         // Transform data to required format
         $formattedData = transformToRequiredFormat($data, $accountNumber);
-
+ 
         // Save to singleTrade.json (overwrite - latest only)
         $singleTradeFile = $accountDir . '/singleTrade.json';
         $jsonData = json_encode($formattedData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
         if ($jsonData === false) {
             throw new Exception("Failed to encode JSON data: " . json_last_error_msg());
         }
-
+ 
         if (file_put_contents($singleTradeFile, $jsonData, LOCK_EX) === false) {
             throw new Exception("Failed to write to singleTrade.json");
         }
-
+ 
         // Append to allTrade.json (historical log)
         $totalRecords = appendToAllTrades($accountDir, $formattedData);
-
+ 
         return [
             'success' => true,
             'message' => 'Trading data saved successfully',
@@ -395,31 +389,31 @@ function saveTradingData($accountNumber, $data) {
             'singleTrade_size' => filesize($singleTradeFile) . ' bytes',
             'allTrade_size' => filesize($accountDir . '/allTrade.json') . ' bytes'
         ];
-
+ 
     } catch (Exception $e) {
         throw new Exception("Error saving data: " . $e->getMessage());
     }
 }
-
+ 
 // Main execution
 try {
     // Get raw POST data
     $rawData = file_get_contents('php://input');
-    
+   
     if (empty($rawData)) {
         throw new Exception("No data received");
     }
-
+ 
     // Decode JSON data
     $data = json_decode($rawData, true);
-    
+   
     if (json_last_error() !== JSON_ERROR_NONE) {
         throw new Exception("Invalid JSON data: " . json_last_error_msg());
     }
-
+ 
     // Extract account number from the data
     $accountNumber = null;
-    
+   
     // Try different possible locations for account number
     if (isset($data['account_info']['account_number'])) {
         $accountNumber = $data['account_info']['account_number'];
@@ -428,31 +422,31 @@ try {
     } elseif (isset($data['account_number'])) {
         $accountNumber = $data['account_number'];
     }
-    
+   
     if (empty($accountNumber)) {
         throw new Exception("Account number not found in data. Please ensure account_info.account_number is set.");
     }
-
+ 
     // Save the data
     $result = saveTradingData($accountNumber, $data);
-    
+   
     // Log success
     error_log("Trading data saved successfully for account: $accountNumber (Total records: {$result['total_records_in_allTrade']})");
-    
+   
     http_response_code(200);
     echo json_encode($result);
-
+ 
 } catch (Exception $e) {
     http_response_code(400);
-    
+   
     $errorResponse = [
         'success' => false,
         'error' => $e->getMessage(),
         'timestamp' => date('Y-m-d H:i:s')
     ];
-    
+   
     echo json_encode($errorResponse);
-    
+   
     // Log error
     error_log("Trading API Error: " . $e->getMessage());
 }
